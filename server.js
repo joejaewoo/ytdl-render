@@ -1,26 +1,35 @@
 const express = require("express");
-const { execSync } = require("child_process");
-const { readFileSync, unlinkSync, readdirSync, mkdirSync, rmSync } = require("fs");
+const { spawn } = require("child_process");
+const { readFileSync, readdirSync, mkdirSync, rmSync } = require("fs");
 const { join } = require("path");
 const { tmpdir } = require("os");
-const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static("public"));
 
-// Video info API
-app.get("/api/info", (req, res) => {
+function runCmd(cmd, args, timeout = 30000) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(cmd, args, { timeout });
+    let stdout = "", stderr = "";
+    proc.stdout.on("data", (d) => (stdout += d));
+    proc.stderr.on("data", (d) => (stderr += d));
+    proc.on("close", (code) => {
+      if (code === 0) resolve(stdout);
+      else reject(new Error(stderr || `exit code ${code}`));
+    });
+    proc.on("error", reject);
+  });
+}
+
+app.get("/api/info", async (req, res) => {
   const url = req.query.url;
   if (!url) return res.status(400).json({ error: "URL이 필요합니다." });
 
   try {
     const cleanUrl = url.split("&list=")[0].split("&start_radio")[0];
-    const raw = execSync(`yt-dlp --no-warnings --dump-json "${cleanUrl}"`, {
-      encoding: "utf-8",
-      timeout: 15000,
-    });
+    const raw = await runCmd("yt-dlp", ["--no-warnings", "--dump-json", cleanUrl], 15000);
     const info = JSON.parse(raw);
     const duration = parseInt(info.duration || "0", 10);
     const mins = Math.floor(duration / 60);
@@ -34,12 +43,11 @@ app.get("/api/info", (req, res) => {
     });
   } catch (e) {
     console.error("Info error:", e.message);
-    res.status(500).json({ error: "영상 정보를 가져올 수 없습니다." });
+    res.status(500).json({ error: "영상 정보를 가져올 수 없습니다: " + e.message.slice(0, 300) });
   }
 });
 
-// Download API
-app.get("/api/download", (req, res) => {
+app.get("/api/download", async (req, res) => {
   const url = req.query.url;
   const quality = req.query.quality || "720";
   const format = req.query.format || "mp4";
@@ -51,15 +59,16 @@ app.get("/api/download", (req, res) => {
 
   try {
     mkdirSync(tmpDir, { recursive: true });
+    const outTemplate = join(tmpDir, "%(title)s.%(ext)s");
 
-    let cmd;
+    let args;
     if (format === "mp3") {
-      cmd = `yt-dlp --no-warnings -x --audio-format mp3 --audio-quality 192K -o "${join(tmpDir, "%(title)s.%(ext)s")}" "${cleanUrl}"`;
+      args = ["--no-warnings", "-x", "--audio-format", "mp3", "--audio-quality", "192K", "-o", outTemplate, cleanUrl];
     } else {
-      cmd = `yt-dlp --no-warnings -f "bestvideo[height<=${quality}]+bestaudio/best[height<=${quality}]/best" --merge-output-format mp4 -o "${join(tmpDir, "%(title)s.%(ext)s")}" "${cleanUrl}"`;
+      args = ["--no-warnings", "-f", `bestvideo[height<=${quality}]+bestaudio/best[height<=${quality}]/best`, "--merge-output-format", "mp4", "-o", outTemplate, cleanUrl];
     }
 
-    execSync(cmd, { encoding: "utf-8", timeout: 300000 });
+    await runCmd("yt-dlp", args, 300000);
 
     const files = readdirSync(tmpDir);
     if (files.length === 0) {
@@ -77,12 +86,11 @@ app.get("/api/download", (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`);
     res.send(fileBuffer);
 
-    // Cleanup
     try { rmSync(tmpDir, { recursive: true }); } catch {}
   } catch (e) {
     try { rmSync(tmpDir, { recursive: true }); } catch {}
     console.error("Download error:", e.message);
-    res.status(500).json({ error: "다운로드 실패: " + e.message.slice(0, 200) });
+    res.status(500).json({ error: "다운로드 실패: " + e.message.slice(0, 300) });
   }
 });
 
