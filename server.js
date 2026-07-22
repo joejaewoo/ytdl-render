@@ -1,6 +1,6 @@
 const express = require("express");
 const { spawn } = require("child_process");
-const { readFileSync, readdirSync, mkdirSync, rmSync } = require("fs");
+const { readFileSync, readdirSync, mkdirSync, rmSync, existsSync } = require("fs");
 const { join } = require("path");
 const { tmpdir } = require("os");
 
@@ -8,6 +8,20 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.static("public"));
+
+const cookiesPath = join(__dirname, "cookies.txt");
+const hasCookies = existsSync(cookiesPath);
+
+function getBaseArgs() {
+  const args = [
+    "--no-warnings",
+    "--extractor-args", "youtube:player_client=mediaconnect,web_creator",
+    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "--no-check-certificates",
+  ];
+  if (hasCookies) args.push("--cookies", cookiesPath);
+  return args;
+}
 
 function runCmd(cmd, args, timeout = 30000) {
   return new Promise((resolve, reject) => {
@@ -29,7 +43,8 @@ app.get("/api/info", async (req, res) => {
 
   try {
     const cleanUrl = url.split("&list=")[0].split("&start_radio")[0];
-    const raw = await runCmd("yt-dlp", ["--no-warnings", "--dump-json", cleanUrl], 15000);
+    const args = [...getBaseArgs(), "--dump-json", cleanUrl];
+    const raw = await runCmd("yt-dlp", args, 20000);
     const info = JSON.parse(raw);
     const duration = parseInt(info.duration || "0", 10);
     const mins = Math.floor(duration / 60);
@@ -61,11 +76,11 @@ app.get("/api/download", async (req, res) => {
     mkdirSync(tmpDir, { recursive: true });
     const outTemplate = join(tmpDir, "%(title)s.%(ext)s");
 
-    let args;
+    let args = [...getBaseArgs()];
     if (format === "mp3") {
-      args = ["--no-warnings", "-x", "--audio-format", "mp3", "--audio-quality", "192K", "-o", outTemplate, cleanUrl];
+      args.push("-x", "--audio-format", "mp3", "--audio-quality", "192K", "-o", outTemplate, cleanUrl);
     } else {
-      args = ["--no-warnings", "-f", `bestvideo[height<=${quality}]+bestaudio/best[height<=${quality}]/best`, "--merge-output-format", "mp4", "-o", outTemplate, cleanUrl];
+      args.push("-f", `bestvideo[height<=${quality}]+bestaudio/best[height<=${quality}]/best`, "--merge-output-format", "mp4", "-o", outTemplate, cleanUrl);
     }
 
     await runCmd("yt-dlp", args, 300000);
@@ -96,4 +111,5 @@ app.get("/api/download", async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`서버 시작: http://localhost:${PORT}`);
+  console.log(hasCookies ? "✅ cookies.txt 사용 중" : "⚠️ cookies.txt 없음 - player_client 우회 모드");
 });
