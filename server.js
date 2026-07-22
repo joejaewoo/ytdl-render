@@ -13,9 +13,8 @@ const cookiesPath = join(__dirname, "cookies.txt");
 const hasCookies = existsSync(cookiesPath);
 
 function getBaseArgs() {
-  const args = ["--no-warnings"];
+  const args = ["--no-warnings", "--no-playlist"];
   if (hasCookies) args.push("--cookies", cookiesPath);
-  args.push("--extractor-args", "youtube:player_client=default,ios");
   return args;
 }
 
@@ -39,17 +38,26 @@ app.get("/api/info", async (req, res) => {
 
   try {
     const cleanUrl = url.split("&list=")[0].split("&start_radio")[0];
-    const args = [...getBaseArgs(), "-j", "--skip-download", cleanUrl];
+    // Fetch only metadata fields - no format resolution at all
+    const args = [
+      ...getBaseArgs(),
+      "--print", "%(title)s",
+      "--print", "%(uploader)s",
+      "--print", "%(thumbnail)s",
+      "--print", "%(duration)s",
+      cleanUrl,
+    ];
     const raw = await runCmd("yt-dlp", args, 20000);
-    const info = JSON.parse(raw);
-    const duration = parseInt(info.duration || "0", 10);
+    const lines = raw.trim().split("\n");
+
+    const duration = parseInt(lines[3] || "0", 10);
     const mins = Math.floor(duration / 60);
     const secs = duration % 60;
 
     res.json({
-      title: info.title || "",
-      author: info.uploader || info.channel || "",
-      thumbnail: info.thumbnail || "",
+      title: lines[0] || "",
+      author: lines[1] || "",
+      thumbnail: lines[2] || "",
       duration: `${mins}:${secs.toString().padStart(2, "0")}`,
     });
   } catch (e) {
