@@ -66,6 +66,21 @@ app.get("/api/info", async (req, res) => {
   }
 });
 
+// Debug endpoint - shows what yt-dlp actually sees
+app.get("/api/debug", async (req, res) => {
+  const url = req.query.url;
+  if (!url) return res.status(400).send("URL이 필요합니다.");
+
+  const cleanUrl = url.split("&list=")[0].split("&start_radio")[0];
+  try {
+    const args = [...getBaseArgs(), "--list-formats", cleanUrl];
+    const raw = await runCmd("yt-dlp", args, 30000);
+    res.type("text/plain").send(raw);
+  } catch (e) {
+    res.type("text/plain").status(500).send("에러:\n" + e.message);
+  }
+});
+
 app.get("/api/download", async (req, res) => {
   const url = req.query.url;
   const quality = req.query.quality || "720";
