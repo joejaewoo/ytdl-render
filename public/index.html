@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>즐거움의힘 유튜브 다운로더</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;900&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    ::selection { background: #2563eb30; }
+    body { background: #f4f6fa; color: #1a1a2e; font-family: 'Noto Sans KR', sans-serif; min-height: 100vh; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(14px) } to { opacity:1; transform:translateY(0) } }
+    @keyframes spin { to { transform:rotate(360deg) } }
+
+    header {
+      background: #162850; padding: 28px 20px; text-align: center;
+      border-radius: 0 0 28px 28px; box-shadow: 0 4px 24px rgba(22,40,80,0.15);
+    }
+    .logo { display: inline-flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+    .logo-icon {
+      width: 40px; height: 40px; border-radius: 12px;
+      background: linear-gradient(135deg, #3b82f6, #60a5fa);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; color: #fff; font-weight: 900;
+    }
+    .logo-text { font-size: 22px; font-weight: 900; color: #fff; letter-spacing: -0.02em; }
+    .logo-sub { font-size: 13px; color: #94a8cc; }
+
+    main { max-width: 580px; margin: 0 auto; padding: 28px 16px 60px; }
+
+    .input-box {
+      display: flex; gap: 8px; background: #fff; border-radius: 14px;
+      border: 1px solid #e2e6ef; padding: 6px; box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    .input-box input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: #162850; font-size: 15px; padding: 12px 14px; font-family: inherit;
+    }
+    .input-box input::placeholder { color: #a0a8b8; }
+    .btn-search {
+      background: #2563eb; color: #fff; border: none; border-radius: 10px;
+      padding: 12px 24px; font-size: 15px; font-weight: 700; cursor: pointer;
+      display: flex; align-items: center; gap: 6px; transition: 0.15s;
+    }
+    .btn-search:disabled { background: #94a8cc; cursor: wait; }
+
+    .error { color: #dc2626; font-size: 13px; margin-top: 14px; background: #fef2f2; padding: 10px 14px; border-radius: 10px; line-height: 1.5; }
+
+    .card {
+      margin-top: 24px; background: #fff; border-radius: 18px;
+      border: 1px solid #e2e6ef; overflow: hidden; animation: fadeUp 0.3s ease-out;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06); display: none;
+    }
+    .card.show { display: block; }
+    .thumb-wrap { position: relative; aspect-ratio: 16/9; background: #e8eefb; }
+    .thumb-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .duration {
+      position: absolute; bottom: 10px; right: 10px; background: #162850dd;
+      color: #fff; font-size: 12px; padding: 4px 10px; border-radius: 7px;
+      font-weight: 700; font-family: monospace;
+    }
+    .card-body { padding: 22px; }
+    .card-body h2 { font-size: 16px; font-weight: 700; line-height: 1.55; color: #162850; }
+    .card-body .author { font-size: 13px; color: #7b8599; margin-top: 5px; }
+
+    .options { display: flex; gap: 16px; margin-top: 22px; flex-wrap: wrap; }
+    .options label { font-size: 11px; color: #7b8599; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; display: block; margin-bottom: 8px; }
+    .pills { display: flex; gap: 6px; }
+    .pill {
+      background: #f8f9fc; color: #7b8599; border: 1px solid #e2e6ef; border-radius: 10px;
+      padding: 9px 19px; font-size: 13px; font-weight: 700; cursor: pointer;
+      text-transform: uppercase; letter-spacing: 0.03em; transition: 0.15s;
+    }
+    .pill.active { background: #e8eefb; color: #2563eb; border: 2px solid #2563eb; padding: 8px 18px; }
+
+    .btn-download {
+      width: 100%; margin-top: 24px; padding: 15px; border: none; border-radius: 12px;
+      background: linear-gradient(135deg, #162850, #1e3a6e); color: #fff;
+      font-size: 16px; font-weight: 800; cursor: pointer;
+      box-shadow: 0 4px 16px rgba(22,40,80,0.25);
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-download:disabled { background: #94a8cc; box-shadow: none; }
+
+    .progress { font-size: 12px; margin-top: 10px; text-align: center; color: #2563eb; }
+    .progress.done { color: #16a34a; }
+    .note { font-size: 11px; color: #7b8599; margin-top: 10px; text-align: center; line-height: 1.6; }
+    footer { padding: 16px; font-size: 11px; color: #b0b8c9; text-align: center; }
+
+    .spinner { width: 20px; height: 20px; animation: spin 0.7s linear infinite; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <div class="logo-icon">▶</div>
+      <span class="logo-text">즐거움의힘</span>
+    </div>
+    <p class="logo-sub">YouTube 영상 다운로더</p>
+  </header>
+
+  <main>
+    <div class="input-box">
+      <input id="urlInput" placeholder="YouTube 주소를 붙여넣으세요" />
+      <button class="btn-search" id="searchBtn" onclick="handleSearch()">검색</button>
+    </div>
+    <div id="error" class="error" style="display:none"></div>
+
+    <div id="card" class="card">
+      <div class="thumb-wrap">
+        <img id="thumb" src="" alt="" />
+        <span id="duration" class="duration"></span>
+      </div>
+      <div class="card-body">
+        <h2 id="title"></h2>
+        <p id="author" class="author"></p>
+
+        <div class="options">
+          <div>
+            <label>형식</label>
+            <div class="pills" id="formatPills">
+              <button class="pill active" onclick="setFormat('mp4')">MP4</button>
+              <button class="pill" onclick="setFormat('mp3')">MP3</button>
+            </div>
+          </div>
+          <div id="qualitySection">
+            <label>화질</label>
+            <div class="pills" id="qualityPills">
+              <button class="pill" onclick="setQuality('360')">360p</button>
+              <button class="pill active" onclick="setQuality('720')">720p</button>
+              <button class="pill" onclick="setQuality('1080')">1080p</button>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn-download" id="downloadBtn" onclick="handleDownload()">
+          ⬇ 720p MP4 다운로드
+        </button>
+        <div id="progress" class="progress" style="display:none"></div>
+        <div id="note" class="note" style="display:none">
+          1080p는 영상에 따라 가장 가까운 화질로 대체될 수 있습니다.
+        </div>
+      </div>
+    </div>
+  </main>
+  <footer>즐거움의힘 유튜브 다운로더</footer>
+
+  <script>
+    let currentFormat = "mp4";
+    let currentQuality = "720";
+    let currentUrl = "";
+    let videoTitle = "";
+
+    const $ = (id) => document.getElementById(id);
+    const spinnerSvg = `<svg class="spinner" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="3" stroke-dasharray="50 20" stroke-linecap="round"/></svg>`;
+
+    function showError(msg) { $("error").textContent = msg; $("error").style.display = "block"; }
+    function hideError() { $("error").style.display = "none"; }
+
+    function setFormat(f) {
+      currentFormat = f;
+      $("formatPills").querySelectorAll(".pill").forEach((b, i) => {
+        b.classList.toggle("active", (i === 0 && f === "mp4") || (i === 1 && f === "mp3"));
+      });
+      $("qualitySection").style.display = f === "mp3" ? "none" : "";
+      updateDownloadBtn();
+    }
+
+    function setQuality(q) {
+      currentQuality = q;
+      $("qualityPills").querySelectorAll(".pill").forEach((b, i) => {
+        b.classList.toggle("active", ["360","720","1080"][i] === q);
+      });
+      $("note").style.display = q === "1080" && currentFormat !== "mp3" ? "block" : "none";
+      updateDownloadBtn();
+    }
+
+    function updateDownloadBtn() {
+      const btn = $("downloadBtn");
+      if (currentFormat === "mp3") {
+        btn.textContent = "🎵 MP3 다운로드";
+      } else {
+        btn.textContent = `⬇ ${currentQuality}p MP4 다운로드`;
+      }
+    }
+
+    async function handleSearch() {
+      const url = $("urlInput").value.trim();
+      if (!url) return;
+      currentUrl = url;
+      hideError();
+      $("card").classList.remove("show");
+
+      const btn = $("searchBtn");
+      btn.disabled = true;
+      btn.innerHTML = spinnerSvg;
+
+      try {
+        const res = await fetch(`/api/info?url=${encodeURIComponent(url)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "오류가 발생했습니다.");
+
+        videoTitle = data.title;
+        $("title").textContent = data.title;
+        $("author").textContent = data.author;
+        $("thumb").src = data.thumbnail;
+        $("duration").textContent = data.duration;
+        $("card").classList.add("show");
+      } catch (e) {
+        showError(e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "검색";
+      }
+    }
+
+    async function handleDownload() {
+      hideError();
+      const btn = $("downloadBtn");
+      const prog = $("progress");
+      btn.disabled = true;
+      btn.innerHTML = spinnerSvg + " 다운로드 중...";
+      prog.textContent = "서버에서 영상을 가져오는 중... (최대 1~2분)";
+      prog.className = "progress";
+      prog.style.display = "block";
+
+      try {
+        const params = new URLSearchParams({ url: currentUrl, format: currentFormat, quality: currentQuality });
+        const res = await fetch(`/api/download?${params}`);
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `서버 오류 (${res.status})`);
+        }
+
+        prog.textContent = "파일 저장 중...";
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const ext = currentFormat === "mp3" ? "mp3" : "mp4";
+        a.href = blobUrl;
+        a.download = `${videoTitle.replace(/[<>:"/\\|?*]/g, "")}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+
+        prog.textContent = "✅ 다운로드 완료!";
+        prog.className = "progress done";
+      } catch (e) {
+        showError(e.message);
+        prog.style.display = "none";
+      } finally {
+        btn.disabled = false;
+        updateDownloadBtn();
+      }
+    }
+
+    $("urlInput").addEventListener("keydown", (e) => { if (e.key === "Enter") handleSearch(); });
+  </script>
+</body>
+</html>
